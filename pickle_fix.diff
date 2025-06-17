@@ -1,0 +1,127 @@
+--- a/app/pickle.py
++++ b/app/pickle.py
+@@ def run_feature(feature: str, pickle_bytes: bytes, filename: str):
+-    if feature == "List Globals":
+-        ops = list(pickletools.genops(pickle_bytes))
+-        globals_ = [op.arg for op in ops if op.name == 'GLOBAL']
+-        parsed = []
+-        for g in globals_:
+-            parts = g.split('\n')
+-            if len(parts) == 2:
+-                parsed.append({'module': parts[0], 'name': parts[1]})
+-        if parsed:
+-            df = pd.DataFrame(parsed).drop_duplicates().reset_index(drop=True)
+-            st.table(df)
+-        else:
+-            st.write("No GLOBAL opcodes found.")
++    elif feature == "List Globals":
++        parsed = []
++        for opcode, arg, pos in pickletools.genops(pickle_bytes):
++            if opcode.name == 'GLOBAL' and isinstance(arg, str) and '\n' in arg:
++                mod, nm = arg.split('\n', 1)
++                parsed.append({'module': mod, 'name': nm})
++        if parsed:
++            df = pd.DataFrame(parsed).drop_duplicates().reset_index(drop=True)
++            st.table(df)
++        else:
++            st.write("No GLOBAL opcodes found.")
+
+@@ def run_feature(feature: str, pickle_bytes: bytes, filename: str):
+-    elif feature == "Opcode Stats":
+-        ops = [op.name for op in pickletools.genops(pickle_bytes)]
+-        counts = pd.Series(ops).value_counts()
+-        st.bar_chart(counts)
+-        st.table(counts.rename_axis('opcode').reset_index(name='count'))
++    elif feature == "Opcode Stats":
++        names = []
++        for opcode, arg, pos in pickletools.genops(pickle_bytes):
++            names.append(opcode.name)
++        counts = pd.Series(names).value_counts()
++        st.bar_chart(counts)
++        st.table(counts.rename_axis('opcode').reset_index(name='count'))
+
+@@ def run_feature(feature: str, pickle_bytes: bytes, filename: str):
+-    elif feature == "Protocol Versions":
+-        ops = list(pickletools.genops(pickle_bytes))
+-        protos = [op.arg for op in ops if op.name == 'PROTO']
+-        if protos:
+-            df = pd.DataFrame({'protocol': protos})
+-            st.table(df['protocol'].value_counts().rename_axis('protocol').reset_index(name='count'))
+-        else:
+-            st.write("No PROTO opcodes found.")
++    elif feature == "Protocol Versions":
++        protos = []
++        for opcode, arg, pos in pickletools.genops(pickle_bytes):
++            if opcode.name == 'PROTO':
++                protos.append(arg)
++        if protos:
++            df = pd.DataFrame({'protocol': protos})
++            st.table(df['protocol']
++                     .value_counts()
++                     .rename_axis('protocol')
++                     .reset_index(name='count'))
++        else:
++            st.write("No PROTO opcodes found.")
+
+@@ def run_feature(feature: str, pickle_bytes: bytes, filename: str):
+-    elif feature == "Find Large Objects":
+-        ops = list(pickletools.genops(pickle_bytes))
+-        large = []
+-        for op in ops:
+-            if op.name in ('BINUNICODE', 'SHORT_BINUNICODE', 'BINBYTES', 'SHORT_BINBYTES'):
+-                size = len(op.arg) if hasattr(op.arg, '__len__') else 0
+-                if size > 1024:
+-                    large.append({'opcode': op.name, 'size': size})
+-        if large:
+-            st.table(pd.DataFrame(large))
+-        else:
+-            st.write("No constants >1KB found.")
++    elif feature == "Find Large Objects":
++        large = []
++        for opcode, arg, pos in pickletools.genops(pickle_bytes):
++            if opcode.name in ('BINUNICODE', 'SHORT_BINUNICODE', 'BINBYTES', 'SHORT_BINBYTES'):
++                size = len(arg) if hasattr(arg, '__len__') else 0
++                if size > 1024:
++                    large.append({'opcode': opcode.name, 'size': size})
++        if large:
++            st.table(pd.DataFrame(large))
++        else:
++            st.write("No constants >1KB found.")
+
+@@ def run_feature(feature: str, pickle_bytes: bytes, filename: str):
+-    elif feature == "Detect Dangerous Objects":
+-        st.subheader("Dangerous Opcodes")
+-        ops = list(pickletools.genops(pickle_bytes))
+-        entries = []
+-        SAFE_MODULES = {'builtins'}
+-        for op in ops:
+-            # GLOBAL referencing non-builtins
+-            if op.name == 'GLOBAL':
+-                mod_name = op.arg
+-                if isinstance(mod_name, str) and '\n' in mod_name:
+-                    mod, nm = mod_name.split('\n')
+-                    if mod not in SAFE_MODULES:
+-                        entries.append({'opcode':'GLOBAL','module':mod,'name':nm})
+-            # Any call‐like opcode is suspicious
+-            elif op.name in ('REDUCE','NEWOBJ','STACK_GLOBAL'):
+-                entries.append({'opcode':op.name,'arg':op.arg})
+-        if entries:
+-            st.table(pd.DataFrame(entries))
+-        else:
+-            st.write("No dangerous opcodes detected.")
++    elif feature == "Detect Dangerous Objects":
++        st.subheader("Dangerous Opcodes")
++        entries = []
++        SAFE_MODULES = {'builtins'}
++        for opcode, arg, pos in pickletools.genops(pickle_bytes):
++            if opcode.name == 'GLOBAL':
++                if isinstance(arg, str) and '\n' in arg:
++                    mod, nm = arg.split('\n', 1)
++                    if mod not in SAFE_MODULES:
++                        entries.append({'opcode': 'GLOBAL', 'module': mod, 'name': nm})
++            elif opcode.name in ('REDUCE', 'NEWOBJ', 'STACK_GLOBAL'):
++                entries.append({'opcode': opcode.name, 'arg': arg})
++        if entries:
++            st.table(pd.DataFrame(entries))
++        else:
++            st.write("No dangerous opcodes detected.")
