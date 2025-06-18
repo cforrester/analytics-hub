@@ -68,7 +68,8 @@ A Dockerized Streamlit application for performing prescriptive analytics on a wi
 
 ## Development
 
-- Source code lives in the app/ directory.
+- app.py is the main Streamlit frontend.
+- Source code for modules lives in the app/ directory.
 - After making changes, rebuild and restart:
     docker compose build streamlit_app
     docker compose up -d
